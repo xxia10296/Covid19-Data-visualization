@@ -1,0 +1,175 @@
+<!-- load Visualization: GeoChart
+https://developers.google.com/chart/interactive/docs/gallery/geochart -->
+
+
+
+<html>
+  <head>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+
+
+      google.charts.load('current', {
+        'packages':['geochart'],
+        // Note: you will need to get a mapsApiKey for your project.
+        // See: https://developers.google.com/chart/interactive/docs/basic_load_libs#load-settings
+        'mapsApiKey': 'AIzaSyDSYwBaDXDzAtx9cYrr5_nKkYXQw5wXVoo'
+      });
+
+        // callback that instantiates map, passes in data, and matches data
+        // https://developers.google.com/chart/interactive/docs/gallery/geochart
+        function drawRegionsMap() {
+        let data = google.visualization.arrayToDataTable(InfoData); 
+        let options = {
+            colorAxis: {colors: ['#ffffb3', '#00aaff', '#9fdfbf']},
+            datalessRegionColor: 'white',
+            defaultColor: '#f5f5f5',
+            tooltip: {isHtml: true}
+        };
+        let chart = new google.visualization.GeoChart(document.getElementById('regions_div'));
+
+        // template: https://developers.google.com/chart/interactive/docs/events
+        /*
+        var table = new google.visualization.Table(document.getElementById('table_div'));
+        table.draw(data, options);
+
+        // Every time the table fires the "select" event, it should call your
+        // selectHandler() function.
+        google.visualization.events.addListener(table, 'select', selectHandler);
+
+        function selectHandler(e) {
+        alert('A table row was selected');
+        }
+        */
+        function selectHandler() {
+          let selection = chart.getSelection()[0];
+          if (selection)
+            SVGplot(data.getValue(selection.row, 0))
+        }
+        google.visualization.events.addListener(chart, 'select', selectHandler);
+        chart.draw(data, options);
+        }
+
+      // reformat country's data for info modal windown when mouseover, and feed the data into callback function 
+      let InfoData = [['Country', 'Confirmed', 'Deaths']];     // 3 categories that displayed on modal when mouseover
+      let confirmed = 0;
+      let death = 0;
+      fetch('https://api.covid19api.com/summary')
+        .then(response => response.json())
+        .then(function(data)
+        {
+            // console.log(data['Countries'][0]['Country'])
+            for ( let i = 0; i < data['Countries'].length; i++) {
+                //console.log(data['Countries'][i]['Country'] === 'United States of America')
+                if (data['Countries'][i]['Country'] === 'United States of America') {
+                    //console.log(data['Countries'][i]['TotalConfirmed'])
+                    InfoData.push([ 'US', data['Countries'][i]['TotalConfirmed'], data['Countries'][i]['TotalDeaths']])
+                } else if (data['Countries'][i]['Country'] === 'Russian Federation') {
+                    //console.log((data['Countries'][i]['Country'] === 'Russian Federation'))
+                    InfoData.push([ 'Russia', data['Countries'][i]['TotalConfirmed'], data['Countries'][i]['TotalDeaths']])
+                } else if (data['Countries'][i]['Country'] === 'Venezuela (Bolivarian Republic)') {
+                    InfoData.push([ 'Venezuela', data['Countries'][i]['TotalConfirmed'], data['Countries'][i]['TotalDeaths']])
+                } else if (data['Countries'][i]['Country'] === 'Tanzania, United Republic of') {
+                    InfoData.push([ 'Tanzania', data['Countries'][i]['TotalConfirmed'], data['Countries'][i]['TotalDeaths']])
+                }
+                InfoData.push([ data['Countries'][i]['Country'], data['Countries'][i]['TotalConfirmed'], data['Countries'][i]['TotalDeaths']])
+                //console.log(InfoData)
+            }
+            google.charts.setOnLoadCallback(drawRegionsMap);
+        });
+
+
+      
+
+      // reformat the past 30 days data and plot line chart using SVG
+      let past30DayData = []
+      fetch('https://corona.lmao.ninja/v2/historical')
+        .then(response => response.json())
+        .then(function(data) {
+            past30DayData = data
+        });
+        //console.log(past30DayData)
+
+      function SVGplot(country) {
+        let country_name = country;
+        let data = past30DayData;
+        if (country_name == 'US') {
+            country_name = 'USA'
+        } else if (country_name == 'United Kingdom') {
+            country_name = 'uk'
+        }
+        for (let country in data) {
+            let country_data = []
+            if (country_name == data[country]['country']) {
+                for (let day in data[country]['timeline']['cases']) 
+                    country_data.push({date: day, confirmed: data[country]['timeline']['cases'][day], death: data[country]['timeline']['deaths'][day]
+                });
+                document.getElementById('svgChart').innerHTML = animationSVG;
+
+                let width = 280;
+                let height = 180;
+                let path_confirmed = 'M 0 0 ';
+                let path_death = 'M 0 0 ';
+                let chart = document.getElementById('chart');
+                chart.style.width = width;
+                chart.style.height = height;
+
+                for (let day in country_data) {
+                    let path_confirmedx = (parseInt(day)) * (width / country_data.length-1); 
+                    let path_confirmedy = country_data[day]['confirmed'] * (height / country_data[country_data.length-1]['confirmed']);
+                    path_confirmed += path_confirmedx + ' ' + path_confirmedy + ' '; 
+
+                    let path_deathx = (parseInt(day)) * (width / country_data.length-1); 
+                    let path_deathy = country_data[day]['death'] * (height / country_data[country_data.length-1]['confirmed']);  // proprotional to confirmed numbers
+                    path_death += path_deathx + ' ' + path_deathy + ' '; 
+                }
+                document.getElementById('path_confirmed').setAttribute("transform", 'scale(1, -1) translate(0, -' + height + ')');
+                document.getElementById('path_confirmed').setAttribute('d', path_confirmed);
+                document.getElementById('path_death').setAttribute("transform", 'scale(1, -1) translate(0, -' + height + ')');
+                document.getElementById('path_death').setAttribute('d', path_death);
+                document.getElementById('chart_label').innerHTML = country_name;
+                }
+            }
+        }
+        // https://blog.fullstackdigital.com/creating-an-animated-dashed-line-background-with-svg-and-css-170f89f47000
+        var animationSVG = `
+        <center>
+        <svg id="chart">
+            <defs id="defs">
+                <style type="text/css" id="style">
+                    .svgchart {
+                        border: 1px solid black;
+                    }
+                    .chart_path {
+                        fill: none; 
+                        stroke-linecap: round;
+                        stroke-width: 3; 
+                        stroke-dasharray: 512;
+                        stroke-dashoffset: 512;
+                        animation: chart_path_animation 6s linear forwards;
+                    }
+                    @keyframes chart_path_animation {
+                        100% {
+                            stroke-dashoffset: 1;
+                        }
+                    }
+                </style>
+            </defs>
+            <path id="path_death" class="chart_path" stroke="orange" />
+            <path id="path_confirmed" class="chart_path" stroke="#9fdfbf" />
+        </svg>
+        </center>
+        `
+
+    </script>
+  </head>
+  <body>
+    <div id="regions_div" style="width: 800px; height: 500px;"></div>
+    <div>
+        <div style="text-align:center" id="chart_label">Select a Country</div>
+        <div id="svgChart" className="svgchart"></div>
+    </div>
+
+
+  </body>
+</html>
